@@ -5,8 +5,8 @@ servers = [
     {
         :name => "k8s-head",
         :type => "master",
-        :box => "ubuntu/xenial64",
-        :box_version => "20180831.0.0",
+        :box => "ubuntu/bionic64",
+        :box_version => "20190405.0.0",
         :eth1 => "192.168.205.10",
         :mem => "2048",
         :cpu => "2"
@@ -14,8 +14,8 @@ servers = [
     {
         :name => "k8s-node-1",
         :type => "node",
-        :box => "ubuntu/xenial64",
-        :box_version => "20180831.0.0",
+        :box => "ubuntu/bionic64",
+        :box_version => "20190405.0.0",
         :eth1 => "192.168.205.11",
         :mem => "2048",
         :cpu => "2"
@@ -23,8 +23,8 @@ servers = [
     {
         :name => "k8s-node-2",
         :type => "node",
-        :box => "ubuntu/xenial64",
-        :box_version => "20180831.0.0",
+        :box => "ubuntu/bionic64",
+        :box_version => "20190405.0.0",
         :eth1 => "192.168.205.12",
         :mem => "2048",
         :cpu => "2"
@@ -33,17 +33,33 @@ servers = [
 
 # This script to install k8s using kubeadm will get executed after a box is provisioned
 $configureBox = <<-SCRIPT
-
+    # set node-ip
+    export IP_ADDR=$(ip -4 addr show enp0s8 |  grep inet  | awk {'print $2'} | cut -d/ -f1)    
+    
+    export DEBIAN_FRONTEND=noninteractive
     # install docker v17.03
     # reason for not using docker provision is that it always installs latest version of the docker, but kubeadm requires 17.03 or older
     apt-get update
     apt-get install -y apt-transport-https ca-certificates curl software-properties-common
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
     add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
-    apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 17.03 | head -1 | awk '{print $3}')
+    apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06.3 | head -1 | awk '{print $3}')
 
     # run docker commands as vagrant user (sudo not required)
     usermod -aG docker vagrant
+
+    cat > /etc/docker/daemon.json <<EOF
+    {
+      "exec-opts": ["native.cgroupdriver=systemd"],
+      "log-driver": "json-file",
+      "log-opts": {
+        "max-size": "100m"
+      },
+      "storage-driver": "overlay2"
+    }
+EOF
+    sudo systemctl restart docker
+
 
     # install kubeadm
     apt-get install -y apt-transport-https curl
@@ -62,17 +78,22 @@ EOF
     sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 
     # ip of this box
-    IP_ADDR=`ifconfig enp0s8 | grep Mask | awk '{print $2}'| cut -f2 -d:`
-    # set node-ip
-    sudo sed -i "/^[^#]*KUBELET_EXTRA_ARGS=/c\KUBELET_EXTRA_ARGS=--node-ip=$IP_ADDR" /etc/default/kubelet
+    
+    if [ ! -f /etc/default/kubelet ];
+    then
+        sudo echo KUBELET_EXTRA_ARGS=--node-ip=$IP_ADDR > /etc/default/kubelet
+    else
+        sudo sed -i "/^[^#]*KUBELET_EXTRA_ARGS=/c\KUBELET_EXTRA_ARGS=--node-ip=$IP_ADDR" /etc/default/kubelet
+    fi
     sudo systemctl restart kubelet
 SCRIPT
 
 $configureMaster = <<-SCRIPT
     echo "This is master"
     # ip of this box
-    IP_ADDR=`ifconfig enp0s8 | grep Mask | awk '{print $2}'| cut -f2 -d:`
+    export IP_ADDR=$(ip -4 addr show enp0s8 |  grep inet  | awk {'print $2'} | cut -d/ -f1)
 
+    echo IP_ADDR=$IP_ADDR
     # install k8s master
     HOST_NAME=$(hostname -s)
     kubeadm init --apiserver-advertise-address=$IP_ADDR --apiserver-cert-extra-sans=$IP_ADDR  --node-name $HOST_NAME --pod-network-cidr=172.16.0.0/16
@@ -89,22 +110,19 @@ $configureMaster = <<-SCRIPT
 
     kubeadm token create --print-join-command >> /etc/kubeadm_join_cmd.sh
     chmod +x /etc/kubeadm_join_cmd.sh
+    cp -f /etc/kubeadm_join_cmd.sh /vagrant/shared/kubeadm_join_cmd.sh
 
-    # required for setting up password less ssh between guest VMs
-    sudo sed -i "/^[^#]*PasswordAuthentication[[:space:]]no/c\PasswordAuthentication yes" /etc/ssh/sshd_config
-    sudo service sshd restart
 
 SCRIPT
 
 $configureNode = <<-SCRIPT
     echo "This is worker"
-    apt-get install -y sshpass
-    sshpass -p "vagrant" scp -o StrictHostKeyChecking=no vagrant@192.168.205.10:/etc/kubeadm_join_cmd.sh .
-    sh ./kubeadm_join_cmd.sh
+    cp /vagrant/shared/kubeadm_join_cmd.sh ./kubeadm_join_cmd.sh
+    chmod a+x ./kubeadm_join_cmd.sh
+    ./kubeadm_join_cmd.sh
 SCRIPT
 
 Vagrant.configure("2") do |config|
-
     servers.each do |opts|
         config.vm.define opts[:name] do |config|
 
@@ -116,7 +134,7 @@ Vagrant.configure("2") do |config|
             config.vm.provider "virtualbox" do |v|
 
                 v.name = opts[:name]
-            	 v.customize ["modifyvm", :id, "--groups", "/Ballerina Development"]
+                v.customize ["modifyvm", :id, "--groups", "/Ballerina Development"]
                 v.customize ["modifyvm", :id, "--memory", opts[:mem]]
                 v.customize ["modifyvm", :id, "--cpus", opts[:cpu]]
 
@@ -132,6 +150,7 @@ Vagrant.configure("2") do |config|
             else
                 config.vm.provision "shell", inline: $configureNode
             end
+          
 
         end
 

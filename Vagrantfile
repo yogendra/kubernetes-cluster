@@ -102,6 +102,11 @@ $configureMaster = <<-SCRIPT
     sudo --user=vagrant mkdir -p /home/vagrant/.kube
     cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
     chown $(id -u vagrant):$(id -g vagrant) /home/vagrant/.kube/config
+    
+    cp /home/vagrant/.kube/config /vagrant/shared/config
+    echo "On the host machine you can run following to connect to k8s cluster:"
+    echo "export KUBECONFIG=\$(pwd)/shared/config"
+    echo "kubectl get-cluster"
 
     # install Calico pod network addon
     export KUBECONFIG=/etc/kubernetes/admin.conf
@@ -143,13 +148,9 @@ Vagrant.configure("2") do |config|
             # we cannot use this because we can't install the docker version we want - https://github.com/hashicorp/vagrant/issues/4871
             #config.vm.provision "docker"
 
-            config.vm.provision "shell", inline: $configureBox
+            config.vm.provision "shell", name: "bootstrap", inline: $configureBox
 
-            if opts[:type] == "master"
-                config.vm.provision "shell", inline: $configureMaster
-            else
-                config.vm.provision "shell", inline: $configureNode
-            end
+            config.vm.provision "shell", name: "k8s", inline:  opts[:type] == "master" ? $configureMaster: $configureNode
           
 
         end

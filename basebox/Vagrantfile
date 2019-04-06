@@ -1,0 +1,12 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+# This script to install k8s using kubeadm will get executed after a box is provisioned
+
+Vagrant.configure("2") do |config|
+    config.vm.box = "ubuntu/bionic64"
+    config.vm.box_version = "20190405.0.0"
+    config.vm.hostname = "k8s-base"
+    config.vm.provision "shell", name: "bootstrap", path: "bootstrap.sh"
+    config.vm.provision "shell", name: "cleanup", path: "cleanup.sh"
+    config.vm.provision "shell", name: "minimize", path: "minimize.sh"
+end

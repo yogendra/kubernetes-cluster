@@ -13,6 +13,6 @@ Provider: $BOX_PROVIDER
 Machine : $BOX_MACHINE
 EOF
 
-[[ ! -f $BOX_FILE ]] && ./build.sh
+[[ ! -f $BOX_FILE ]] && ./build.sh $BOX_VERSION
 
-grant cloud publish -r $BOX_NAME $BOX_VERSION $BOX_PROVIDER $BOX_FILE
+vagrant cloud publish -r -f -s "k8s base box (linux, ubuntu, bionic, docker, kubeadm)" -d "k8s base box (linux, ubuntu, bionic, docker, kubeadm)" $BOX_NAME $BOX_VERSION $BOX_PROVIDER $BOX_FILE

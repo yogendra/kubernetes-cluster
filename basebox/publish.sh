@@ -15,4 +15,4 @@ EOF
 
 [[ ! -f $BOX_FILE ]] && ./build.sh
 
-grant cloud publish $BOX_NAME $BOX_VERSION $BOX_PROVIDER $BOX_FILE
+grant cloud publish -r $BOX_NAME $BOX_VERSION $BOX_PROVIDER $BOX_FILE

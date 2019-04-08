@@ -1,12 +1,13 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-
+$box = "yogendra/k8s-base"
+$box_version = "20190408.0.0"
 servers = [
     {
         :name => "k8s-head",
         :type => "master",
-        :box => "ubuntu/bionic64",
-        :box_version => "20190405.0.0",
+        :box => $box,
+        :box_version => $box_version,
         :eth1 => "192.168.205.10",
         :mem => "2048",
         :cpu => "2"
@@ -14,8 +15,8 @@ servers = [
     {
         :name => "k8s-node-1",
         :type => "node",
-        :box => "ubuntu/bionic64",
-        :box_version => "20190405.0.0",
+        :box => $box,
+        :box_version => $box_version,
         :eth1 => "192.168.205.11",
         :mem => "2048",
         :cpu => "2"
@@ -23,8 +24,8 @@ servers = [
     {
         :name => "k8s-node-2",
         :type => "node",
-        :box => "ubuntu/bionic64",
-        :box_version => "20190405.0.0",
+        :box => $box,
+        :box_version => $box_version,
         :eth1 => "192.168.205.12",
         :mem => "2048",
         :cpu => "2"
@@ -35,47 +36,6 @@ servers = [
 $configureBox = <<-SCRIPT
     # set node-ip
     export IP_ADDR=$(ip -4 addr show enp0s8 |  grep inet  | awk {'print $2'} | cut -d/ -f1)    
-    
-    export DEBIAN_FRONTEND=noninteractive
-    # install docker v17.03
-    # reason for not using docker provision is that it always installs latest version of the docker, but kubeadm requires 17.03 or older
-    apt-get update
-    apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-    add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
-    apt-get update && apt-get install -y docker-ce=$(apt-cache madison docker-ce | grep 18.06.3 | head -1 | awk '{print $3}')
-
-    # run docker commands as vagrant user (sudo not required)
-    usermod -aG docker vagrant
-
-    cat > /etc/docker/daemon.json <<EOF
-    {
-      "exec-opts": ["native.cgroupdriver=systemd"],
-      "log-driver": "json-file",
-      "log-opts": {
-        "max-size": "100m"
-      },
-      "storage-driver": "overlay2"
-    }
-EOF
-    sudo systemctl restart docker
-
-
-    # install kubeadm
-    apt-get install -y apt-transport-https curl
-    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
-    cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
-    deb http://apt.kubernetes.io/ kubernetes-xenial main
-EOF
-    apt-get update
-    apt-get install -y kubelet kubeadm kubectl
-    apt-mark hold kubelet kubeadm kubectl
-
-    # kubelet requires swap off
-    swapoff -a
-
-    # keep swap off after reboot
-    sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
 
     # ip of this box
     
@@ -105,8 +65,8 @@ $configureMaster = <<-SCRIPT
     
     cp /home/vagrant/.kube/config /vagrant/shared/config
     echo "On the host machine you can run following to connect to k8s cluster:"
-    echo "export KUBECONFIG=\$(pwd)/shared/config"
-    echo "kubectl get-cluster"
+    echo "    export KUBECONFIG=\$(pwd)/shared/config"
+    echo "    kubectl get-cluster"
 
     # install Calico pod network addon
     export KUBECONFIG=/etc/kubernetes/admin.conf
@@ -116,8 +76,6 @@ $configureMaster = <<-SCRIPT
     kubeadm token create --print-join-command >> /etc/kubeadm_join_cmd.sh
     chmod +x /etc/kubeadm_join_cmd.sh
     cp -f /etc/kubeadm_join_cmd.sh /vagrant/shared/kubeadm_join_cmd.sh
-
-
 SCRIPT
 
 $configureNode = <<-SCRIPT
@@ -137,7 +95,7 @@ Vagrant.configure("2") do |config|
             config.vm.network :private_network, ip: opts[:eth1]
 
             config.vm.provider "virtualbox" do |v|
-
+                v.linked_clone = true
                 v.name = opts[:name]
                 v.customize ["modifyvm", :id, "--groups", "/Ballerina Development"]
                 v.customize ["modifyvm", :id, "--memory", opts[:mem]]

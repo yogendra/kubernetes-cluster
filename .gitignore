@@ -4,3 +4,4 @@ basebox/package.box
 .gitignore
 shared/config
 shared/kubeadm_join_cmd.sh
+basebox/k8s-base.box

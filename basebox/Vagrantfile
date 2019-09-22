@@ -10,7 +10,7 @@ Vagrant.configure("2") do |config|
             v.cpus = 2
         end
         config.vm.box = "ubuntu/bionic64"
-        config.vm.box_version = "20190405.0.0"
+        config.vm.box_version = "20190918.0.0"
         config.vm.hostname = "k8s-base"
         config.vm.provision "shell", name: "bootstrap", path: "bootstrap.sh"
         config.vm.provision "shell", name: "cleanup", path: "cleanup.sh"
